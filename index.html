@@ -1,0 +1,372 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Map</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+
+        .country:hover {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+
+        .text {
+            font-size: 10px;
+            text-transform: capitalize;
+        }
+
+        #container {
+            margin: 10px 10%;
+            border: 2px solid #000;
+            border-radius: 5px;
+            height: 100%;
+            overflow: hidden;
+            background: #F0F8FF;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        div.tooltip {
+            color: #222;
+            background: #fff;
+            padding: .5em;
+            text-shadow: #f5f5f5 0 1px 0;
+            border-radius: 2px;
+            box-shadow: 0px 0px 2px 0px #a6a6a6;
+            opacity: 0.9;
+            position: absolute;
+        }
+
+        .graticule {
+            fill: none;
+            stroke: #bbb;
+            stroke-width: .5px;
+            stroke-opacity: .5;
+        }
+
+        .equator {
+            stroke: #ccc;
+            stroke-width: 1px;
+        }
+
+        .month {
+            margin-left: 20px;
+            width: 70px;
+            height: 30px;
+            background-color: #f3dc34;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="mapTitle">2019/12/31</h1>
+    <div id="container"></div>
+
+    <input type="button" class="month" data-end="0" value="2019.12" />
+    <input type="button" class="month" data-end="1" value="2020.01" />
+    <input type="button" class="month" data-end="2" value="2020.02" />
+    <input type="button" class="month" data-end="3" value="2020.03" />
+    <input type="button" class="month" data-end="4" value="2020.04" />
+    <br />
+    <h3>mortality＝total death(sum death for every country at that time)/total case<br>deaths=sum death from beginning until choose time (for every country)<br>Case=sum case from beginning until choose time(for every country)<br>dataset is using the one provided</h3>
+
+    <script src="js/d3.min.js"></script>
+    <script src="js/topojson.v1.min.js"></script>
+    <script>
+        var nowMonth = "";
+        var month201912, month202001, month202002, month202003, month202004;
+        d3.csv("COVID-19-geographic-disbtribution-worldwide.csv", function (csv) {
+            month201912 = {
+                month: "31/12/2019",
+                values: {}
+            };
+            month202001 = {
+                month: "30/01/2020",
+                values: {}
+            };
+            month202002 = {
+                month: "29/02/2020",
+                values: {}
+            };
+            month202003 = {
+                month: "31/03/2020",
+                values: {}
+            };
+            month202004 = {
+                month: "15/04/2020",
+                values: {}
+            };
+
+            csv.forEach(function (c) {
+                if (c.countriesAndTerritories == "United_States_of_America") {
+                    c.countriesAndTerritories = "United States";
+                }
+                if (c.countriesAndTerritories == "United_Kingdom") {
+                    c.countriesAndTerritories = "UNITED KINGDOM";
+                }
+
+                if (c.countriesAndTerritories == "Russia") {
+                    c.countriesAndTerritories = "RUSSIAN FEDERATION";
+                }
+
+                month201912.values[c.countriesAndTerritories.toUpperCase()] = { cases: 0, deaths: 0 };
+                month202001.values[c.countriesAndTerritories.toUpperCase()] = { cases: 0, deaths: 0 };
+                month202002.values[c.countriesAndTerritories.toUpperCase()] = { cases: 0, deaths: 0 };
+                month202003.values[c.countriesAndTerritories.toUpperCase()] = { cases: 0, deaths: 0 };
+                month202004.values[c.countriesAndTerritories.toUpperCase()] = { cases: 0, deaths: 0 };
+            });
+
+            for (var i = 0; i < csv.length; i++) {
+                if (csv[i].month.length < 2) {
+                    csv[i].month = "0" + csv[i].month;
+                }
+                if (csv[i].day.length < 2) {
+                    csv[i].day = "0" + csv[i].day;
+                }
+
+                var d = Number(csv[i].year + csv[i].month + csv[i].day);
+                if (d <= 20191231) {
+                    month201912.values[csv[i].countriesAndTerritories.toUpperCase()].cases += Number(csv[i].cases);
+                    month201912.values[csv[i].countriesAndTerritories.toUpperCase()].deaths += Number(csv[i].deaths);
+                }
+                if (d <= 20200131) {
+                    month202001.values[csv[i].countriesAndTerritories.toUpperCase()].cases += Number(csv[i].cases);
+                    month202001.values[csv[i].countriesAndTerritories.toUpperCase()].deaths += Number(csv[i].deaths);
+                }
+                if (d <= 20200229) {
+                    month202002.values[csv[i].countriesAndTerritories.toUpperCase()].cases += Number(csv[i].cases);
+                    month202002.values[csv[i].countriesAndTerritories.toUpperCase()].deaths += Number(csv[i].deaths);
+                }
+                if (d <= 20200331) {
+                    month202003.values[csv[i].countriesAndTerritories.toUpperCase()].cases += Number(csv[i].cases);
+                    month202003.values[csv[i].countriesAndTerritories.toUpperCase()].deaths += Number(csv[i].deaths);
+                }
+                if (d <= 20200415) {
+                    month202004.values[csv[i].countriesAndTerritories.toUpperCase()].cases += Number(csv[i].cases);
+                    month202004.values[csv[i].countriesAndTerritories.toUpperCase()].deaths += Number(csv[i].deaths);
+                }
+            }
+            nowMonth = month201912;
+            d3.json("world-topo-min.json", function (error, world) {
+                topo = topojson.feature(world, world.objects.countries).features;
+                draw(topo);
+            });
+        });
+
+        var monthBtns = document.getElementsByClassName("month");
+        for (var i = 0; i < monthBtns.length; i++) {
+            monthBtns[i].onclick = function () {
+                var nowDate = this.getAttribute("data-end");
+                if (nowDate == "0") {
+                    nowMonth = month201912;
+                    document.getElementById("mapTitle").innerHTML = "2019/12/31";
+                } else if (nowDate == "1") {
+                    nowMonth = month202001;
+                    document.getElementById("mapTitle").innerHTML = "2020/01/31";
+                }
+                else if (nowDate == "2") {
+                    nowMonth = month202002;
+                    document.getElementById("mapTitle").innerHTML = "2020/02/29";
+                }
+                else if (nowDate == "3") {
+                    nowMonth = month202003;
+                    document.getElementById("mapTitle").innerHTML = "2020/03/31";
+                }
+                else if (nowDate == "4") {
+                    nowMonth = month202004;
+                    document.getElementById("mapTitle").innerHTML = "2020/04/15";
+                }
+                redraw();
+            }
+        }
+
+        //窗口缩放的时候会重新排版
+        d3.select(window).on("resize", throttle);
+
+        //当鼠标在svg上面滚动，地图会缩放
+        var zoom = d3.behavior.zoom()
+            .scaleExtent([1, 9])
+            .on("zoom", move);
+
+        //获取屏幕的宽度
+        var width = document.getElementById('container').offsetWidth;
+        var height = width / 2;//高度是宽度的一半
+
+        var topo, projection, path, svg, g;//定义一些全局变量
+        var total_tweets, neutral_count, positive_count, negative_count;
+        var graticule = d3.geo.graticule();
+
+        var tooltip = d3.select("#container")
+            .append("div")
+            .attr("class", "tooltip hidden");
+
+        setup(width, height);
+        function setup(width, height) {
+            projection = d3.geo.mercator()
+                .translate([(width / 2), (height / 2)])
+                .scale(width / 2 / Math.PI);
+            path = d3.geo.path().projection(projection);
+            svg = d3.select("#container").append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .call(zoom)
+                .append("g");
+            g = svg.append("g");
+        }
+
+        function draw(topo) {
+
+            svg.append("path")
+                .datum(graticule)
+                .attr("class", "graticule")
+                .attr("d", path);
+
+            g.append("path")
+                .datum({ type: "LineString", coordinates: [[-180, 0], [-90, 0], [0, 0], [90, 0], [180, 0]] })
+                .attr("class", "equator")
+                .attr("d", path);
+
+            var country = g.selectAll(".country").data(topo);
+
+            country.enter()
+                .insert("path")
+                .attr("class", "country")
+                .attr("d", path)
+                .on("mouseover", function (d) {
+                    console.log(d.properties.name);
+                })
+                .attr("id", function (d, i) { return d.id; })
+                .attr("title", function (d, i) { return d.properties.name; })
+                .style("fill", function (d, i) { return "#c5dbf2"; });
+
+            country.enter()
+                .insert("circle")
+                .attr("x", function (d) {
+                    var lonlat = d3.geo.centroid(d);
+                    addCircle(d, lonlat[0], lonlat[1]);
+                })
+        }
+
+
+        function redraw() {
+            width = document.getElementById('container').offsetWidth;
+            height = width / 2;
+            d3.select('svg').remove();
+            setup(width, height);
+            draw(topo);
+        }
+
+
+        function move() {
+            var t = d3.event.translate;
+            var s = d3.event.scale;
+            zscale = s;
+            var h = height / 4;
+
+
+            t[0] = Math.min(
+                (width / height) * (s - 1),
+                Math.max(width * (1 - s), t[0])
+            );
+
+            t[1] = Math.min(
+                h * (s - 1) + h * s,
+                Math.max(height * (1 - s) - h * s, t[1])
+            );
+
+            zoom.translate(t);
+            g.attr("transform", "translate(" + t + ")scale(" + s + ")");
+
+            //adjust the country hover stroke width based on zoom level
+            d3.selectAll(".country").style("stroke-width", 1.5 / s);
+        }
+
+        var throttleTimer;
+        function throttle() {
+            window.clearTimeout(throttleTimer);
+            throttleTimer = window.setTimeout(function () {
+                redraw();
+            }, 200);
+        }
+
+        //添加点的函数
+        function addCircle(d, lat, lon) {
+            if (nowMonth.values[d.properties.name.toUpperCase()] == undefined) {
+                return;
+            }
+            var xLinnear = d3.scale.linear()
+                .domain([1, 100000])
+                .range([7, 18]);
+
+            function xColor(n) {
+                if (n >= 0.3) {
+                    return "#db150080"
+                }
+                if (n >= 0.1) {
+                    return "#ef615280"
+                }
+                if (n >= 0.05) {
+                    return "#f98c8080"
+                }
+                if (n >= 0.03) {
+                    return "#fac2bc80"
+                }
+                if (n >= 0.01) {
+                    return "#fcdcd980"
+                }
+                if (n == 0) {
+                    return "green"
+                }
+                else {
+                    return "#fec8e2"
+                }
+            }
+
+            var x = projection([lat, lon])[0];
+            var y = projection([lat, lon])[1];
+            if (isNaN(x)) {
+                return;
+            };
+            var r;
+            if (nowMonth.values[d.properties.name.toUpperCase()].cases == 0) {
+                r = 0;
+            } else {
+                r = (nowMonth.values[d.properties.name.toUpperCase()].deaths / nowMonth.values[d.properties.name.toUpperCase()].cases).toFixed(3);
+            }
+            var rx = xLinnear(nowMonth.values[d.properties.name.toUpperCase()].cases);
+            if (nowMonth.values[d.properties.name.toUpperCase()].cases == 0) {
+                rx = 0;
+            }
+
+
+            g.append("g")
+                .append("svg:circle")
+                .attr("cx", x)
+                .attr("cy", y)
+                .attr("fill", xColor(r))
+                .attr("r", rx)
+                .on("mousemove", function () {
+                    var mouse = d3.mouse(svg.node()).map(function (d) { return parseInt(d); });
+                    var offsetL = document.getElementById('container').offsetLeft + 20;
+                    var offsetT = document.getElementById('container').offsetTop + 10;
+                    tooltip
+                        .classed("hidden", false)
+                        .attr("style", "left:" + (mouse[0] + offsetL) + "px;top:" + (mouse[1] + offsetT) + "px")
+                        .html("Country :" + d.properties.name.toUpperCase() + "<br>Cases:" + nowMonth.values[d.properties.name.toUpperCase()].cases + "<br>Deaths:" + nowMonth.values[d.properties.name.toUpperCase()].deaths + " <br> Mortality:" + r);
+                })
+                .on("mouseout", function (d, i) {
+                    tooltip.classed("hidden", true);
+                });
+        }
+
+    </script>
+</body>
+</html>
